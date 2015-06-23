@@ -1,0 +1,299 @@
+import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Rect;
+import android.util.AttributeSet;
+import android.view.MotionEvent;
+import android.view.View;
+
+import com.okcoin.oklinkwallet.R;
+import com.okcoin.oklinkwallet.util.DensityUtil;
+import java.util.ArrayList;
+
+/**
+ * Created by Robert on 2015/6/3.
+ */
+public class FlowView extends View{
+    public ArrayList<FlowViewItem> flowItems;
+    private Paint textPaint;
+    private Paint bgPaint;
+    private float mOffRight, mOffDotRight, mOffBaseLine;
+    private Context mContext;
+    private int lineWidth, lineHeight; //行宽，行高
+    private int itemWidth, itemHeight; //item宽，高
+    int sizeWidth;//View 的宽
+    private Paint dotPaint;
+    private setOnItemClick mOnItemClick;
+    public FlowView(Context context) {
+        super(context);
+        Init(context);
+    }
+
+    public FlowView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        Init(context);
+    }
+
+    public FlowView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        Init(context);
+    }
+
+    private void Init(Context context) {
+        mContext = context;
+        flowItems = new ArrayList<FlowViewItem>();
+        textPaint = new Paint();
+        textPaint.setAntiAlias(true);
+        textPaint.setColor(context.getResources().getColor(R.color.green));
+        textPaint.setTextAlign(Paint.Align.LEFT);
+        textPaint.setTextSize(DensityUtil.sp2px(context, 15));
+        dotPaint = new Paint();
+        dotPaint.setAntiAlias(true);
+        dotPaint.setColor(context.getResources().getColor(R.color.txt_black));
+        dotPaint.setTextAlign(Paint.Align.LEFT);
+        dotPaint.setTextSize(DensityUtil.sp2px(context, 15));
+
+
+        bgPaint = new Paint();
+        mOffBaseLine = - textPaint.getFontMetrics().top;
+        mOffRight = (int)dotPaint.measureText(",")+DensityUtil.sp2px(context, 5);
+
+        /**
+         * item's height
+         */
+        itemHeight = -(int) textPaint.getFontMetrics().top + (int) textPaint.getFontMetrics().bottom; //positive
+        lineHeight = itemHeight;
+        lineWidth = 0;
+    }
+
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+        sizeWidth = MeasureSpec.getSize(widthMeasureSpec);
+        int sizeHeight = MeasureSpec.getSize(heightMeasureSpec);
+        int modeHeight = MeasureSpec.getMode(heightMeasureSpec);
+        setMeasuredDimension(sizeWidth, (modeHeight == MeasureSpec.EXACTLY) ? sizeHeight : CaculateHeight(sizeWidth));
+
+    }
+
+    /**
+     * 根据控件宽计算出行高
+     * @param widgetWidth
+     * @return
+     */
+    private int CaculateHeight(int widgetWidth) {
+        if(flowItems != null) {
+            lineHeight = itemHeight;
+            lineWidth = 0;
+            for (FlowViewItem flowItem : flowItems) {
+                int itemWidth = flowItem.getWidth();   //get the item Width;
+                if (lineWidth + itemWidth > widgetWidth) {
+                    lineWidth = itemWidth;
+                    lineHeight += itemHeight;
+                } else {
+                    lineWidth += itemWidth;
+                }
+                flowItem.setPosition(lineWidth - itemWidth, lineHeight - itemHeight);
+            }
+            return lineHeight;
+        }
+        return 0;
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        super.onLayout(changed, left, top, right, bottom);
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        Rect mRect;
+        for(int i =0;i< flowItems.size(); i++) {
+            FlowViewItem flowItem = flowItems.get(i);
+            mRect = flowItem.getRect();
+            if (flowItem.isTouched()) {
+                textPaint.setColor(mContext.getResources().getColor(R.color.txt_black));
+            } else {
+                textPaint.setColor(mContext.getResources().getColor(R.color.green));
+            }
+            canvas.drawText(flowItem.getName(), mRect.left, mRect.top + mOffBaseLine, textPaint);
+            if(i!=(flowItems.size()-1))
+                canvas.drawText(",", mRect.right -  mOffRight, mRect.top + mOffBaseLine, dotPaint);
+        }
+    }
+
+    int x,y;
+    int clickPosition= -1 ;
+    long time;
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                x = (int)event.getX();
+                y = (int)event.getY();
+
+                clickPosition = onTouchedItem(x,y);
+                break;
+            case MotionEvent.ACTION_MOVE:
+
+                break;
+            case MotionEvent.ACTION_UP:
+                resetStatus();
+                if(clickPosition >=0) {
+                    if (mOnItemClick != null) {
+                        mOnItemClick.OnItemClick(clickPosition, flowItems.get(clickPosition));
+                    }
+                }
+                break;
+            case MotionEvent.ACTION_CANCEL:
+                resetStatus();
+                break;
+        }
+        return true;
+    }
+
+    public int onTouchedItem(int x, int y) {
+        FlowViewItem onClickItem = null;
+        int clickPosition = -1;
+        for (int i =0; i< flowItems.size(); i++) {
+            onClickItem = flowItems.get(i);
+            if(onClickItem.isContains(x, y)){
+                clickPosition = i;
+            }
+        }
+        invalidate();
+        return clickPosition;
+    }
+
+    public void resetStatus(){
+        for (FlowViewItem flowItem : flowItems) {
+            flowItem.setTouched(false);
+        }
+        invalidate();
+    }
+
+    /**
+     * @param flowList set & reset
+     */
+    public void setFLows(ArrayList<FlowViewItem> flowList) {
+
+        clear();
+        flowItems.addAll(flowList);
+        requestLayout();
+    }
+
+    /**
+     * 添加Flow
+     * @param flow
+     */
+    public void addFlow(FlowViewItem flow) {
+        flowItems.add(flow);
+        requestLayout();
+    }
+
+    /**
+     * 清除Flow
+     */
+    public void clear() {
+        if (flowItems != null) {
+            flowItems.clear();
+            invalidate();
+        }
+    }
+
+    public void SetOnItemClick(setOnItemClick mOnItemClick){
+        this.mOnItemClick = mOnItemClick;
+    }
+
+    public interface setOnItemClick{
+        public void OnItemClick(int position,FlowViewItem flowViewItem);
+    }
+
+    public class FlowViewItem {
+
+        private String name;
+        private boolean mTouched;
+        private int width, height; //item的宽和高
+        private int left, top, right, bottom; //item的区域
+        private Rect mRect;
+
+        public FlowViewItem(String name) {
+            this.name = name;
+            width = (int)textPaint.measureText(name)+(int)mOffRight;
+            height = itemHeight;
+        }
+
+        /**
+         * get the item's Name
+         */
+        public String getName() {
+            return this.name;
+        }
+
+        /**
+         * get the item Area
+         */
+        public Rect getRect() {
+            return mRect;
+        }
+
+        /**
+         * get the item's width
+         *
+         * @return
+         */
+        public int getWidth() {
+            return width;
+        }
+
+        /**
+         * get the item's height  that equal lineHeight
+         *
+         * @return
+         */
+        public int getHeight() {
+            return height;
+        }
+
+        public void setPosition(int left, int top) {
+            this.left = left;
+            this.top = top;
+            this.right = left + width;
+            this.bottom = top + height;
+            mRect = new Rect(left, top, right, bottom);
+        }
+
+        public void setPosition(Rect rect) {
+            mRect = rect;
+        }
+
+        /**
+         * isTouched change the item's bg
+         */
+
+        public boolean isTouched() {
+            return mTouched;
+        }
+
+        /**
+         * set be touched
+         */
+        public void setTouched(boolean mTouched) {
+            this.mTouched = mTouched;
+        }
+
+        /**
+         * setOnCLick
+         */
+        public boolean isContains(int x, int y) {
+            mTouched = false;
+
+            if (x>0 && y >0 && x >= left && x < right && y >= top && y < bottom) {
+                mTouched = true;
+            }
+            return mTouched;
+        }
+    }
+}
